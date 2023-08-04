@@ -1,0 +1,167 @@
+---
+title: "TCC2"
+output: pdf_document
+date: "2023-02-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## TCC2
+
+Código para criação de gráficos e desenvolvimento do estudo de séries temporais na variação do PIB de 2017 a 2021.
+
+```{r}
+
+ # Instalando Pacotes #
+
+#install.packages("readxl")
+library(readxl)
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("ggpubr")
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(RColorBrewer)
+library(scales)
+
+
+
+df_2017 = read_excel("Gastos_M.xlsx", sheet = "2017")
+df_2018 = read_excel("Gastos_M.xlsx", sheet = "2018")
+df_2019 = read_excel("Gastos_M.xlsx", sheet = "2019")
+df_2020 = read_excel("Gastos_M.xlsx", sheet = "2020")
+df_2021 = read_excel("Gastos_M.xlsx", sheet = "2021")
+
+   # Transformando as datas #
+df_2017$novo <-c(2017)
+df_2018$novo <-c(2018)
+df_2019$novo <-c(2019)
+df_2020$novo <-c(2020)
+df_2021$novo <-c(2021)
+
+ # Criando Boxplots #
+
+boxplot( Liquido ~ novo, data = df_2017)
+boxplot( Liquido ~ novo, data = df_2018)
+boxplot( Liquido ~ novo, data = df_2019)
+boxplot( Liquido ~ novo, data = df_2020)
+boxplot( Liquido ~ novo, data = df_2021)
+
+ # Juntando em um df e criando boxplot #
+
+#Tentando transformar em Reais
+#total <- paste('$', formatC(total$Liquido, big.mark=',', format = 'f'))
+#total_2 <- as.data.frame(dollar(total$Liquido))
+
+total <- rbind(df_2017,df_2018,df_2019,df_2020,df_2021) 
+
+
+a <- boxplot(Liquido ~novo, data = total,
+        ylab = expression(bold("Lucro")),
+        xlab = expression(bold("Ano")),
+        main = "Margem de Lucro ao Longo dos Anos",
+        col = "lightgreen"
+        border = "black",
+        notch = F)
+
+
+```
+
+```{r}
+
+## Pacotes de Séries Temporais
+
+#install.packages("sarima")
+#install.packages("Mcomp")
+#install.packages("tidyverse")
+#install.packages("tseries")
+#install.packages("gridExtra")
+#install.packages("knitr")
+#install.packages("kableExtra")
+
+library(sarima)
+library(Mcomp)
+library(tidyverse)
+library(tseries)
+library(gridExtra)
+library(knitr)
+library(gridExtra)
+library(kableExtra)
+
+# GRÁFICO DE LINHAS DO PIB - dados e library
+
+PIB = read_excel("PIB.xlsx", sheet = "Planilha1")
+is.data.frame(PIB)
+
+# Gráfico de fato
+# Adding data label
+variacao_pib = ggplot(data=PIB, aes(x=Trimestre, y=`Variação %`, group=1, label=`Variação %`)) +
+  geom_line(color = "orange", size = 1.25)+
+  geom_point()+
+  geom_text(nudge_y = 2)
+
+variacao_pib+
+  labs(x="Trimestres dos Anos", y="Variação Percentual do PIB")+
+  theme_light()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#Criando a série temporal
+
+serie_temp<-ts(PIB$`Variação %` ,frequency=4)
+plot(serie_temp)
+acf(serie_temp)
+pacf(serie_temp)
+
+# N° de diferenciações necessárias para a serie temp.
+ndiffs(serie_temp)
+
+# Chute inicial
+
+auto.arima(serie_temp, trace = T, approximation = F)
+
+# Determinando AIC's
+Ar_02 = arima(serie_temp, order = c(1,0,0,)) #Aic = 109,03, BIC = 112.0207;
+Ar_03 = arima(serie_temp, order = c(0,0,1)) #Aic = 109,03,  BIC = 112.0211;
+Ar_04 = arima(serie_temp, order = c(1,0,1)) #Aic = 110,42,  BIC = 114.40;
+Ar_07 = arima(serie_temp, order = c(0,0,0)) #Aic = 105,07, AICc = 105,03, BIC = 106.0;
+
+# Verificando AICc's e BIC's
+
+AIC(Ar_02)
+AIC(Ar_03)
+AIC(Ar_04)
+AIC(Ar_07)
+
+
+bic2=AIC(Ar_02,k = log(length(serie_temp)))
+bic3=AIC(Ar_03,k = log(length(serie_temp)))
+bic4=AIC(Ar_04,k = log(length(serie_temp)))
+bic7=AIC(Ar_07,k = log(length(serie_temp)))
+
+# Arima selecionado: ARIMA (0,0,0) - Ruído Branco
+#Checkando os resíduos
+
+# Olhando os resíduos
+checkresiduals(Ar_07)
+residuos = residuals(Ar_07)
+
+# Testes de correlação entre os resíduos
+Box.test(residuos, type = "Ljung")
+
+# Testando normalidade dos resíduos
+normalidade = rnorm(70)
+shapiro.test(residuos)
+ks.test(residuos, normalidade)
+
+
+#Fazendo previsões
+
+prev = forecast(Ar_07, h=6)
+autoplot(prev)
+
+
+```
